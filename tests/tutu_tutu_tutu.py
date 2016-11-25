@@ -3,16 +3,22 @@ import unittest
 import re
 
 from mock import Mock
+from selenium.webdriver.remote.webelement import WebElement
+
+from seismograph.ext.selenium.proxy.proxy import BaseProxy, WebElementProxy
+
+from seismograph.ext.selenium.utils import change_name_from_python_to_html
 
 from seismograph.ext.selenium import drivers
+from seismograph.ext.selenium.router import Router
 
 from seismograph.ext.selenium import add_route
 from seismograph.ext.selenium.browser import BrowserConfig
 from seismograph.ext.selenium.exceptions import RouteNotFound, RouterError
 from seismograph.ext.selenium.proxy import WebDriverProxy
 from tests.lib.case import BaseTestCase, ConfigTestCaseMixin
-from selenium.webdriver.remote.webdriver import WebDriver
-
+from seismograph.ext.selenium.query import QueryObject, ValueFormat, ATTRIBUTE_ALIASES, attribute_by_alias, Expression, \
+    Equal, ContainsText, TAG_ALIASES, tag_by_alias, QueryResult
 
 
 #
@@ -31,23 +37,21 @@ class RouterTests(BaseTestCase):
     @classmethod
     def a_func(cls, a):
         return a
-#     def test_proxy(self):
-#         from seismograph.ext.selenium.router import Router
-#         router = Router(123)
-#         router.__proxy = 123
-#         self.assertEqual(router.__proxy, 123)
-#
-#     def test_rule(self):
-#         from seismograph.ext.selenium.router import Router
-#         self.assertDictEqual(Router.__rules__, {})
-#         Router.add_rule(123, '')
-#         rule = re.compile(r'^{}$'.format(123))
-#         self.assertEqual(Router.__rules__[rule], '')
-#         Router.__rules__ = {}
+    def test_proxy(self):
+        router = Router(123)
+        router.__proxy = 123
+        self.assertEqual(router.__proxy, 123)
+
+    def test_rule(self):
+        self.assertDictEqual(Router.__rules__, {})
+        Router.add_rule(123, '')
+        rule = re.compile(r'^{}$'.format(123))
+        self.assertEqual(Router.__rules__[rule], '')
+        Router.__rules__ = {}
 
     # Not working
     def test_add_route(self):
-        from seismograph.ext.selenium.router import Router
+
         self.assertDictEqual(Router.__rules__, {})
         add_route(123, '')
         rule = re.compile(r'^{}$'.format(123))
@@ -56,7 +60,6 @@ class RouterTests(BaseTestCase):
         Router.__rules__ = {}
 
     def test_get(self):
-        from seismograph.ext.selenium.router import Router
         mock_file = Mock()
         mock_file.config.PROJECT_URL = "http://FAKE.COM/FAKE/"
         mock_file.browser = {"FAKE": "FAKE"}
@@ -70,7 +73,6 @@ class RouterTests(BaseTestCase):
         Router.__rules__ = {}
 
     def test_get_2(self):
-        from seismograph.ext.selenium.router import Router
         mock_file = Mock()
         mock_file.config.PROJECT_URL = None
         mock_file.browser = {"FAKE": "FAKE"}
@@ -81,7 +83,6 @@ class RouterTests(BaseTestCase):
         Router.__rules__ = {}
 
     def test_get_3(self):
-        from seismograph.ext.selenium.router import Router
         mock_file = Mock()
         mock_file.config.PROJECT_URL = None
         mock_file.browser = {"FAKE": "FAKE"}
@@ -97,7 +98,6 @@ class RouterTests(BaseTestCase):
         Router.__rules__ = {}
 
     def test_get_page(self):
-        from seismograph.ext.selenium.router import Router
         mock_file = Mock()
         mock_file.config.PROJECT_URL = None
         mock_file.browser = {"FAKE": "FAKE"}
@@ -111,6 +111,104 @@ class RouterTests(BaseTestCase):
         Router.__rules__ = {}
 
 
+# class QueryTests(BaseTestCase):
+class QueryTests(unittest.TestCase):
+    def test_QueryObject_methods(self):
+        query = QueryObject('la', el={"la": 123})
+        self.assertEqual(query.tag, 'la')
+        self.assertEqual(query.selector, {"el": {"la": 123}})
 
-# if __name__ == '__main__':
-#     unittest.main()
+        res = query.__str__()
+        waited_answer = u'<{} {}>'.format(query.tag, u' '.join((u'{}="{}"'.format(k, v) for k, v in query.selector.items())),)
+        self.assertEqual(res, waited_answer)
+
+        proxy = WebElementProxy(WebElement('1', 1))
+        query.__call__(proxy)
+        self.assertIsInstance(query, QueryObject)
+
+    def test_tag_by_alias(self):
+        awaited_res = TAG_ALIASES.get('kek', 'kek')
+        res = tag_by_alias('kek')
+
+        self.assertEqual(res, awaited_res)
+
+        res = tag_by_alias('any')
+
+        self.assertEqual(res, '*')
+
+    def test_attribute_by_alias(self):
+        res = change_name_from_python_to_html(
+            ATTRIBUTE_ALIASES.get('id', 'id'),
+        )
+        self.assertEqual(res, attribute_by_alias('id'))
+
+        res = change_name_from_python_to_html(
+            ATTRIBUTE_ALIASES.get('one', 'one'),
+        )
+        self.assertEqual(res, attribute_by_alias('one'))
+
+    def test_make_result(self):
+        pass
+
+    def test_execute(self):
+        pass
+
+    def test_ValueFormat_methods(self):
+        value = ValueFormat('id')
+
+        try:
+            value.__call__()
+        except ValueError as vaue_error:
+            self.assertEqual(vaue_error.message, 'Unknown format')
+
+        value.__format__ = '{attr_value} {attr_name}'
+        res = value.__call__('id')
+        self.assertEqual(res, '{} {}'.format(value.value, attribute_by_alias('id')))
+
+    def test_Expression_metods(self):
+        expression = Expression()
+        self.assertListEqual(expression._expressions, [])
+
+        expression = Expression(12)
+        self.assertEqual(expression.expression(12), expression)
+
+        value_format = ValueFormat('id')
+        value_format.__format__ = '{attr_value} {attr_name}'
+
+        expression = Expression(value_format)
+        self.assertEqual(expression.expression(value_format), expression)
+
+        try:
+            expression = Expression(ContainsText(123))
+        except ValueError as error:
+            self.assertEqual(error.message, 'Restricted format "ContainsText"')
+
+        res = expression.__call__('nice')
+        self.assertEqual(res, 'id niceid nice')
+
+    def test_QueryResult_methods(self):
+        mock = Mock()
+        mock.reason_storage = {'last css query': ''}
+        mock.config.POLLING_DELAY = 1.0
+        mock.config.POLLING_TIMEOUT = 10.0
+        mock.disable_polling = WebElementProxy(WebElement('1', 1)).disable_polling
+
+        query = QueryResult(mock, 'css')
+        self.assertIsNotNone(query.__we)
+        self.assertIsNotNone(query.__css)
+        self.assertIsNotNone(query.__proxy)
+
+        res = query.__repr__()
+        self.assertIsNotNone(res)
+
+        res = query.__css_string__()
+        self.assertNotEqual(res, query.__css)
+
+        res = query.wait()
+        self.assertNotEqual(res, mock)
+
+
+
+
+if __name__ == '__main__':
+    unittest.main()
