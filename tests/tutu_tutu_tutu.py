@@ -39,9 +39,28 @@ class PollingTests(unittest.TestCase):
 
 
 class RouterTests(unittest.TestCase):
-    @classmethod
-    def a_func(cls, a):
-        return a
+    def setUp(self):
+        def a_func(a):
+            return a
+
+        def prepare_config_with_project_url():
+            mock_file = Mock()
+            mock_file.config.PROJECT_URL = "http://FAKE.COM/FAKE/"
+            mock_file.browser = {"FAKE": "FAKE"}
+            return mock_file
+
+        def prepare_config_without_project_url():
+            mock_file = Mock()
+            mock_file.config.PROJECT_URL = None
+            mock_file.browser = {"FAKE": "FAKE"}
+            return mock_file
+
+        self.mock_with = prepare_config_with_project_url
+        self.mock_without = prepare_config_without_project_url
+        self.func_for_test = a_func
+
+    def tearDown(self):
+        Router.__rules__ = {}
 
     def test_proxy(self):
         router = Router(123)
@@ -55,69 +74,61 @@ class RouterTests(unittest.TestCase):
         rule = re.compile(r'^{}$'.format(123))
 
         self.assertEqual(Router.__rules__[rule], '')
-        Router.__rules__ = {}
 
     # Not working
     def test_add_route(self):
 
         self.assertDictEqual(Router.__rules__, {})
+
         add_route(123, '')
+
         rule = re.compile(r'^{}$'.format(123))
+
         self.assertEqual(add_route(123, ''), None)
         self.assertEqual(Router.__rules__[rule], '')
-        Router.__rules__ = {}
 
     def test_get(self):
-        mock_file = Mock()
-        mock_file.config.PROJECT_URL = "http://FAKE.COM/FAKE/"
-        mock_file.browser = {"FAKE": "FAKE"}
 
-        add_route(1, self.a_func)
-        add_route(2, self.a_func)
+        mock_file = self.mock_with()
+
+        add_route(1, self.func_for_test)
+        add_route(2, self.func_for_test)
 
         res = Router(mock_file).get('1')
 
         self.assertEqual(res, mock_file)
-        Router.__rules__ = {}
 
     def test_get_except(self):
-        mock_file = Mock()
-        mock_file.config.PROJECT_URL = None
-        mock_file.browser = {"FAKE": "FAKE"}
+        mock_file = self.mock_without()
 
         try:
             Router(mock_file).get('1')
         except RouteNotFound as route_error:
             self.assertEqual(route_error.message, '1')
-        Router.__rules__ = {}
 
     def test_get_without_config(self):
         mock_file = Mock()
         mock_file.config.PROJECT_URL = None
         mock_file.browser = {"FAKE": "FAKE"}
 
-        add_route(1, self.a_func)
-        add_route(2, self.a_func)
+        add_route(1, self.func_for_test)
+        add_route(2, self.func_for_test)
 
         try:
             router = Router(mock_file)
             router.go_to('1')
         except RouterError as route_error:
             self.assertEqual(route_error.message, 'Can not go to the URL. Project URL is not set to config.')
-        Router.__rules__ = {}
 
     def test_get_page(self):
-        mock_file = Mock()
-        mock_file.config.PROJECT_URL = None
-        mock_file.browser = {"FAKE": "FAKE"}
+        mock_file = self.mock_without
 
-        add_route(1, self.a_func)
-        add_route(2, self.a_func)
+        add_route(1, self.func_for_test)
+        add_route(2, self.func_for_test)
 
         router = Router(mock_file)
         res = router.get_page('1')
         self.assertEqual(res, mock_file)
-        Router.__rules__ = {}
 
 
 class QueryTests(unittest.TestCase):
