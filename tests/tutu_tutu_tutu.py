@@ -161,9 +161,9 @@ class QueryTests(unittest.TestCase):
 
     def test_attribute_by_alias(self):
         res = change_name_from_python_to_html(
-            ATTRIBUTE_ALIASES.get('id', 'id'),
+            ATTRIBUTE_ALIASES.get('id_'),
         )
-        self.assertEqual(res, attribute_by_alias('id'))
+        self.assertEqual(res, attribute_by_alias('id_'))
 
         res = change_name_from_python_to_html(
             ATTRIBUTE_ALIASES.get('one', 'one'),
