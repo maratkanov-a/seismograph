@@ -1,3 +1,4 @@
+# coding=utf-8
 import socket
 import unittest
 
@@ -5,7 +6,7 @@ import re
 
 import requests
 from mock import Mock
-from seismograph.ext.selenium.polling import do, wrap
+from seismograph.ext.selenium.polling import do, wrap, POLLING_EXCEPTIONS
 from selenium.webdriver.remote.webelement import WebElement
 
 from seismograph.ext.selenium.proxy.proxy import WebElementProxy
@@ -23,19 +24,33 @@ from seismograph.ext.selenium.query import QueryObject, ValueFormat, ATTRIBUTE_A
 
 class PollingTests(unittest.TestCase):
     def test_import(self):
+        # проверка import error
+
         from seismograph.ext.selenium.polling import HTTPException as H
         H = None
         self.assertRaises(ImportError, H)
 
     def a(self):
-        return self
+        pass
+
+    def raise_io(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.bind(('', 8000))
+
+            s.settimeout(1)
+
+            s.connect(('123.123.123.123', 12345))
+        except socket.error:
+            raise IOError
 
     def test_do(self):
         self.assertNotEqual(wrap()(self.a), self.a)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(('', 8000))
 
-        do(requests.get)()()
+        try:
+            do(self.raise_io, delay=1, timeout=1)()()
+        except IOError as error:
+            self.assertIn(type(error), POLLING_EXCEPTIONS)
 
 
 class RouterTests(unittest.TestCase):
@@ -140,7 +155,8 @@ class QueryTests(unittest.TestCase):
     def test_QueryObject_str_method(self):
         query = QueryObject('la', el={"la": 123})
         res = query.__str__()
-        waited_answer = u'<{} {}>'.format(query.tag, u' '.join((u'{}="{}"'.format(k, v) for k, v in query.selector.items())),)
+        waited_answer = u'<{} {}>'.format(query.tag,
+                                          u' '.join((u'{}="{}"'.format(k, v) for k, v in query.selector.items())), )
         self.assertEqual(res, waited_answer)
 
     def test_QueryObject_call_method(self):
@@ -228,6 +244,7 @@ class QueryTests(unittest.TestCase):
 
         res = query.wait()
         self.assertNotEqual(res, mock)
+
 
 if __name__ == '__main__':
     unittest.main()
